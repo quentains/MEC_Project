@@ -15,8 +15,8 @@ int pow(int a, int b)
 }
 
 /*---------------------------------------------------------------------------*/
-PROCESS(parent_discovery, "Parent Discovery");
-AUTOSTART_PROCESSES(&parent_discovery);
+PROCESS(network_setup, "Network Setup");
+AUTOSTART_PROCESSES(&network_setup);
 
 linkaddr_t *parent_node = NULL;
 int parent_signal = -9999;
@@ -52,13 +52,13 @@ recv_bdcst(struct broadcast_conn *c, const linkaddr_t *from)
     int recipient = 0;
     size = strlen(message) - 3;
 
-    // Compute the recipient from the radio message (avoid broadcast loop)
+    // Compute the recipient from the radio message 
     for(i = 0 ; i < size ; i++)
     {
       recipient = recipient + ((message[i+3]-48) * pow(10,size-i-1));
     }
 
-    // If the message is for this node
+    // If the message is for this node (avoid broadcast loop)
     if(recipient == linkaddr_node_addr.u8[0])
     {
       printf("Parent response received from %d with signal %d\n", from->u8[0], packetbuf_attr(PACKETBUF_ATTR_RSSI));
@@ -79,7 +79,7 @@ static const struct broadcast_callbacks broadcast_call = {recv_bdcst};
 static struct broadcast_conn broadcast;
 
 /*---------------------------------------------------------------------------*/
-PROCESS_THREAD(parent_discovery, ev, data)
+PROCESS_THREAD(network_setup, ev, data)
 {
   static struct etimer et;
   char message[100];
@@ -104,7 +104,6 @@ PROCESS_THREAD(parent_discovery, ev, data)
 
     /* Delay 2-4 seconds */
     etimer_set(&et, CLOCK_SECOND * 4 + random_rand() % (CLOCK_SECOND * 4));
-
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
 
     

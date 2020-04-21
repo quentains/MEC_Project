@@ -5,8 +5,8 @@
 #include <stdio.h>
 
 /*---------------------------------------------------------------------------*/
-PROCESS(child_discovery, "Child Discovery");
-AUTOSTART_PROCESSES(&child_discovery);
+PROCESS(network_setup, "Network Setup");
+AUTOSTART_PROCESSES(&network_setup);
 
 /*---------------------------------------------------------------------------*/
 static void
@@ -34,7 +34,7 @@ static const struct broadcast_callbacks broadcast_call = {recv_child_announce};
 static struct broadcast_conn broadcast;
 
 /*---------------------------------------------------------------------------*/
-PROCESS_THREAD(child_discovery, ev, data)
+PROCESS_THREAD(network_setup, ev, data)
 {
   static struct etimer et;
 
@@ -50,7 +50,6 @@ PROCESS_THREAD(child_discovery, ev, data)
 
     /* Delay 2-4 seconds */
     etimer_set(&et, CLOCK_SECOND * 4 + random_rand() % (CLOCK_SECOND * 4));
-
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
   }
 
