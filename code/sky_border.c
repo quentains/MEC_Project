@@ -8,6 +8,8 @@
 PROCESS(network_setup, "Network Setup");
 AUTOSTART_PROCESSES(&network_setup);
 
+//TODO add a list of all the child nodes using list_neighbors, LIST and MEMB
+
 /*---------------------------------------------------------------------------*/
 static void
 recv_child_announce(struct broadcast_conn *c, const linkaddr_t *from)
