@@ -4,9 +4,12 @@
 #include "lib/list.h"
 #include "lib/memb.h"
 #include "lib/random.h"
+
 #include <stdio.h>
 
-int pow(int a, int b)
+#define MAX_RETRANSMISSIONS 4
+
+int power(int a, int b)
 {
   int res = 1;
   size_t i;
@@ -40,14 +43,14 @@ recv_bdcst(struct broadcast_conn *c, const linkaddr_t *from)
   if (message[0] == 'N' && message[1] == 'D' && message[2] == 'A')
   {
     // If this node is connected to the server
-    printf("Announce received : %s\n", message);
+    printf("[SETUP THREAD] Announce received : %s\n", message);
     if (!not_connected)
     {
       // Respond to the child
       sprintf(message, "NDR%d", from->u8[0]);
       packetbuf_copyfrom(message, strlen(message));
       broadcast_send(c);
-      printf("Reponse (NDR) sent : %s\n", message);
+      printf("[SETUP THREAD] Reponse (NDR) sent : %s\n", message);
     }
     
   }
@@ -62,17 +65,17 @@ recv_bdcst(struct broadcast_conn *c, const linkaddr_t *from)
     // Compute the recipient from the radio message
     for(i = 0 ; i < size ; i++)
     {
-      recipient = recipient + ((message[i+3]-48) * pow(10,size-i-1));
+      recipient = recipient + ((message[i+3]-48) * power(10,size-i-1));
     }
 
     // If the message is for this node (avoid broadcast loop)
     if(recipient == linkaddr_node_addr.u8[0])
     {
-      printf("Parent response received from %d with signal %d\n", from->u8[0], packetbuf_attr(PACKETBUF_ATTR_RSSI));
+      printf("[SETUP THREAD] Parent response received from %d with signal %d\n", from->u8[0], packetbuf_attr(PACKETBUF_ATTR_RSSI));
 
       if (packetbuf_attr(PACKETBUF_ATTR_RSSI) > parent_signal)
       {
-        printf("This parent is better than %d\n", parent_signal);
+        printf("[SETUP THREAD] This parent is better than %d\n", parent_signal);
         parent_signal = packetbuf_attr(PACKETBUF_ATTR_RSSI);
         //from = memb_alloc(&linkaddr_memb);
         linkaddr_copy(parent_node, from);
@@ -110,7 +113,7 @@ PROCESS_THREAD(network_setup, ev, data)
       sprintf(message, "NDA");
       packetbuf_copyfrom(message, strlen(message));
       broadcast_send(&broadcast);
-      printf("Announce (NDA) sent : %s\n", message);
+      printf("[SETUP THREAD] Announce (NDA) sent : %s\n", message);
     }
 
     /* Delay 2-4 seconds */
@@ -125,68 +128,65 @@ PROCESS_THREAD(network_setup, ev, data)
 
 /* This function is called for every incoming unicast packet. */
 static void
-recv_uc(struct unicast_conn *c, const linkaddr_t *from)
+recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
 {
-  printf("I am fairly certain this should not happen right now");
-  
-  //struct unicast_message *msg;
+  char message[100];
+  strcpy(message, (char *)packetbuf_dataptr());
+  int original_sender = 0;
+  size_t size, i;
 
-  /* Grab the pointer to the incoming data. */
-  //msg = packetbuf_dataptr();
+  // If SRV message, need to forward it to the parent_node
+  if (message[0] == 'S' && message[1] == 'R' && message[2] == 'V')
+  {
+    // Get the air quality
+    //int air_quality = (message[3]-48) * 10 + (message[4]-48);
 
-  /* We have two message types, UNICAST_TYPE_PING and
-     UNICAST_TYPE_PONG. If we receive a UNICAST_TYPE_PING message, we
-     print out a message and return a UNICAST_TYPE_PONG. */
-  //if(msg->type == UNICAST_TYPE_PING) {
-    //printf("unicast ping received from %d.%d\n",
-           //from->u8[0], from->u8[1]);
-    //msg->type = UNICAST_TYPE_PONG;
-    //packetbuf_copyfrom(msg, sizeof(struct unicast_message));
-    /* Send it back to where it came from. */
-    //unicast_send(c, from);
+    // Get the size of the address (e.g. "1" or "78" or "676")
+    size = strlen(message) - 5;
+
+    // Get the address of the original sender
+    for(i = 0 ; i < size ; i++)
+    {
+      original_sender = original_sender + ((message[i+5]-48) * power(10,size-i-1));
+    }
+
+    //printf("[DATA THREAD] Unicast received from %d : Sensor %d - Quality = %d\n", 
+    //  from->u8[0], original_sender, air_quality);
+
+    // Forward the message to the parent
+    packetbuf_copyfrom(message, strlen(message));
+    runicast_send(c, parent_node, MAX_RETRANSMISSIONS);
+
+    printf("[DATA THREAD] Forwarding...\n");
+
+  }
+  else
+  {
+    // DEBUG PURPOSE
+    printf("Weird message received from %d.%d\n", from->u8[0], from->u8[1]);
+  }
+
 }
 
 /*---------------------------------------------------------------------------*/
 
-static const struct unicast_callbacks unicast_callbacks = {recv_uc};
-static struct unicast_conn unicast;
+static const struct runicast_callbacks runicast_callbacks = {recv_ruc};
+static struct runicast_conn runicast;
 
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(send_sensor_information, ev, data)
 {
-  PROCESS_EXITHANDLER(unicast_close(&unicast);)
+  PROCESS_EXITHANDLER(runicast_close(&runicast);)
     
   PROCESS_BEGIN();
 
-  //unicast_open(&unicast, 146, &unicast_callbacks);
+  runicast_open(&runicast, 144, &runicast_callbacks);
 
   while(1) {
-    static struct etimer et;
-    //struct unicast_message msg;
-    //struct neighbor *n;
-    //int randneighbor, i;
 
-    printf("[OTHER THREAD] Printing Parent Node %d.%d\n", parent_node->u8[0], parent_node->u8[1]);
-    printf("[OTHER THREAD] Printing Signal Strength: %d\n", parent_signal);
-    
-    /* Delay 2-4 seconds */
-    etimer_set(&et, CLOCK_SECOND * 4 + random_rand() % (CLOCK_SECOND * 4));
-    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
-
-    /* Pick a random neighbor from our list and send a unicast message to it. 
-    if(list_length(neighbors_list) > 0) {
-      randneighbor = random_rand() % list_length(neighbors_list);
-      n = list_head(neighbors_list);
-      for(i = 0; i < randneighbor; i++) {
-        n = list_item_next(n);
-      }
-      printf("sending unicast to %d.%d\n", n->addr.u8[0], n->addr.u8[1]);
-
-      msg.type = UNICAST_TYPE_PING;
-      packetbuf_copyfrom(&msg, sizeof(msg));
-      unicast_send(&unicast, &n->addr);
-    }
-    */
+    // Wait for SRV / CMD to forward
+    PROCESS_WAIT_EVENT();
+  
   }
 
   PROCESS_END();
