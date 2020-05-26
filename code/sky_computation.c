@@ -22,8 +22,8 @@ int power(int a, int b)
 
 /*---------------------------------------------------------------------------*/
 PROCESS(network_setup, "Network Setup");
-PROCESS(send_sensor_information, "Send Sensor Information");
-AUTOSTART_PROCESSES(&network_setup, &send_sensor_information);
+PROCESS(forwarding_messages, "Forwarding SRV & COM");
+AUTOSTART_PROCESSES(&network_setup, &forwarding_messages);
 
 //TODO add a list of the 5 special child nodes using list_neighbors, LIST and MEMB
 //MEMB(linkaddr_memb, linkaddr_t, 1);
@@ -157,13 +157,13 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
     packetbuf_copyfrom(message, strlen(message));
     runicast_send(c, parent_node, MAX_RETRANSMISSIONS);
 
-    printf("[DATA THREAD] Forwarding...\n");
+    printf("[FORWARDING THREAD] Forwarding from %d to %d (%s)\n", from->u8[0], parent_node->u8[0], message);
 
   }
   else
   {
     // DEBUG PURPOSE
-    printf("Weird message received from %d.%d\n", from->u8[0], from->u8[1]);
+    printf("[FORWARDING THREAD] Weird message received from %d.%d\n", from->u8[0], from->u8[1]);
   }
 
 }
@@ -174,7 +174,7 @@ static const struct runicast_callbacks runicast_callbacks = {recv_ruc};
 static struct runicast_conn runicast;
 
 /*---------------------------------------------------------------------------*/
-PROCESS_THREAD(send_sensor_information, ev, data)
+PROCESS_THREAD(forwarding_messages, ev, data)
 {
   PROCESS_EXITHANDLER(runicast_close(&runicast);)
     

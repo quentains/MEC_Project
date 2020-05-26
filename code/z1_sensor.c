@@ -22,8 +22,9 @@ int power(int a, int b)
 
 /*---------------------------------------------------------------------------*/
 PROCESS(network_setup, "Network Setup");
-PROCESS(send_sensor_information, "Send Sensor Information");
-AUTOSTART_PROCESSES(&network_setup, &send_sensor_information);
+PROCESS(send_sensor_data, "Send Sensor Data");
+PROCESS(forwarding_messages, "Forwarding SRV & COM");
+AUTOSTART_PROCESSES(&network_setup, &send_sensor_data, &forwarding_messages);
 
 //MEMB(linkaddr_memb, linkaddr_t, 1);
 static linkaddr_t *parent_node;
@@ -156,13 +157,13 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
     packetbuf_copyfrom(message, strlen(message));
     runicast_send(c, parent_node, MAX_RETRANSMISSIONS);
 
-    printf("[DATA THREAD] Forwarding...\n");
+    printf("[FORWARDING THREAD] Forwarding from %d to %d (%s)\n", from->u8[0], parent_node->u8[0], message);
 
   }
   else
   {
     // DEBUG PURPOSE
-    printf("Weird message received from %d.%d\n", from->u8[0], from->u8[1]);
+    printf("[FORWARDING THREAD] Weird message received from %d.%d\n", from->u8[0], from->u8[1]);
   }
 
 }
@@ -173,10 +174,13 @@ static const struct runicast_callbacks runicast_callbacks = {recv_ruc};
 static struct runicast_conn runicast;
 
 /*---------------------------------------------------------------------------*/
-PROCESS_THREAD(send_sensor_information, ev, data)
+
+// Sending data thread
+PROCESS_THREAD(send_sensor_data, ev, data)
 {
   char message[100];
   int air_quality;
+  static struct etimer before_start;
 
   PROCESS_EXITHANDLER(runicast_close(&runicast);)
     
@@ -184,15 +188,18 @@ PROCESS_THREAD(send_sensor_information, ev, data)
 
   runicast_open(&runicast, 144, &runicast_callbacks);
 
+  /* Wait random seconds to simulate the different time
+  of the node installation (0-59min) */
+  printf("[DATA THREAD] Waiting before start ...\n");
+  etimer_set(&before_start, random_rand()%60 * CLOCK_SECOND);
+  PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&before_start));
+  printf("[DATA THREAD] Starting ...\n");
+
   while(1) {
     static struct etimer et;
     
     // Send the data to the parent
     if(!not_connected && !runicast_is_transmitting(&runicast)) {
-
-      //printf("[DATA THREAD] %u: sending runicast to parent %u\n",
-      // linkaddr_node_addr.u8[0],
-      // parent_node->u8[0]);
 
       // Generate random sensor data
       air_quality = random_rand() % 99 + 1;
@@ -205,13 +212,32 @@ PROCESS_THREAD(send_sensor_information, ev, data)
       printf("[DATA THREAD] Sending data (%d) to the server\n", air_quality);
     }
 
-    /* Delay 1 minute + random sec to avoid that all nodes transmit at the same time */
-    etimer_set(&et, 60*CLOCK_SECOND + random_rand() % (CLOCK_SECOND * 5));
+    /* Delay 1 minute */
+    etimer_set(&et, 60*CLOCK_SECOND);
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
 
   }
 
   PROCESS_END();
 }
+
 /*---------------------------------------------------------------------------*/
 
+// Only forwarding thread
+PROCESS_THREAD(forwarding_messages, ev, data)
+{
+  PROCESS_EXITHANDLER(runicast_close(&runicast);)
+    
+  PROCESS_BEGIN();
+
+  runicast_open(&runicast, 144, &runicast_callbacks);
+
+  while(1) {
+
+    // Wait for SRV / CMD to forward
+    PROCESS_WAIT_EVENT();
+  
+  }
+
+  PROCESS_END();
+}
