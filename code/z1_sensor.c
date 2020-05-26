@@ -168,9 +168,24 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
 
 }
 
+static void
+sent_runicast(struct runicast_conn *c, const linkaddr_t *to, uint8_t retransmissions)
+{
+  //printf("runicast message sent to %d.%d, retransmissions %d\n",
+  // to->u8[0], to->u8[1], retransmissions);
+}
+static void
+timedout_runicast(struct runicast_conn *c, const linkaddr_t *to, uint8_t retransmissions)
+{
+  // If connecion timeout, re-run the network setup to find a new parent
+  printf("[FORWARDING THREAD] Impossible to send data, disconnected from network.");
+  not_connected = 1;
+  parent_signal = -9999;
+}
+
 /*---------------------------------------------------------------------------*/
 
-static const struct runicast_callbacks runicast_callbacks = {recv_ruc};
+static const struct runicast_callbacks runicast_callbacks = {recv_ruc, sent_runicast, timedout_runicast};
 static struct runicast_conn runicast;
 
 /*---------------------------------------------------------------------------*/
