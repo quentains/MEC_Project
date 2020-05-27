@@ -55,7 +55,7 @@ static int parent_signal = -9999;
 static void
 recv_bdcst(struct broadcast_conn *c, const linkaddr_t *from)
 {
-  char message[100];
+  char message[10];
   strcpy(message, (char *)packetbuf_dataptr());
 
 
@@ -114,7 +114,7 @@ static struct broadcast_conn broadcast;
 PROCESS_THREAD(network_setup, ev, data)
 {
   static struct etimer et;
-  char message[100];
+  char message[10];
   PROCESS_EXITHANDLER(broadcast_close(&broadcast);)
 
   PROCESS_BEGIN();
@@ -150,7 +150,7 @@ PROCESS_THREAD(network_setup, ev, data)
 static void
 recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
 {
-  char message[100];
+  char message[10];
   strcpy(message, (char *)packetbuf_dataptr());
   int original_sender = 0;
   size_t size, i;
@@ -262,7 +262,7 @@ static struct runicast_conn runicast;
 // Sending data thread
 PROCESS_THREAD(send_sensor_data, ev, data)
 {
-  char message[100];
+  char message[10];
   int air_quality;
   static struct etimer before_start;
 
