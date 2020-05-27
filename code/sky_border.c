@@ -223,19 +223,46 @@ PROCESS_THREAD(send_orders, ev, data)
     // Send the data to the parent
     if(!runicast_is_transmitting(&runicast)) {
 
+      // TODO : Get this from the python server
       destination = 3;
       order = 1;
 
       sprintf(message, "COM%d%d", order, destination);
       packetbuf_copyfrom(message, strlen(message));
 
-      //runicast_send(&runicast, parent_node, MAX_RETRANSMISSIONS);
+      linkaddr_t *next_node = NULL;
 
-      printf("[DATA THREAD] Sending order %d to the node %d (%s)\n", order, destination, message);
+      struct routes *route;
+      int found = 0;
+      /* Check if we already know this routes. */
+      for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
+      {
+        // We break out of the loop if the address in the list matches with from
+        if((int)route->id == (int)destination) 
+        {
+          found = 1;
+          if(linkaddr_cmp(next_node, &route->addr_fwd))
+          {
+            break;
+          }
+        }
+
+      }
+
+      // If new_route is NULL, this node was not found in our list
+      if(!found)
+      {
+        printf("[ORDER] No route for node %d\n", destination);
+      }
+      else 
+      {
+        runicast_send(&runicast, next_node, MAX_RETRANSMISSIONS);
+        printf("[ORDER] Sending order %d to the node %d (%s)\n", order, destination, message);
+      }
     }
 
     /* Delay 1 minute */
-    etimer_set(&et, (random_rand()%20)*CLOCK_SECOND);
+    etimer_set(&et, (random_rand()%20)*CLOCK_SECOND + 10);
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
 
   }

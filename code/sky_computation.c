@@ -218,6 +218,10 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
     printf("[FORWARDING THREAD] Forwarding from %d to %d (%s)\n", from->u8[0], parent_node->u8[0], message);
 
   }
+  else if (message[0] == 'C' && message[1] == 'O' && message[2] == 'M')
+  {
+    printf("[ORDER] Order received from %d (%s)\n", from->u8[0], message);
+  }
   else
   {
     // DEBUG PURPOSE
