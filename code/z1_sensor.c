@@ -204,6 +204,7 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       new_route->id = original_sender;
 
       // Add the route into the list
+      printf("[ROUTING] New route\n");
       list_add(routes_list, new_route);
     }
 
@@ -222,6 +223,17 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
     // DEBUG PURPOSE
     printf("[FORWARDING THREAD] Weird message received from %d.%d\n", from->u8[0], from->u8[1]);
   }
+
+  /* ===== DEBUG ==== */
+  struct routes *route;
+
+  // Print the current routes
+  for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
+  {
+    printf("[ROUTING] To contact %d, I have to send to %d\n", route->id, route->addr_fwd.u8[0]);
+    //list_remove(routes_list, route);
+  }
+  /* ================ */
 
 }
 
@@ -253,7 +265,6 @@ PROCESS_THREAD(send_sensor_data, ev, data)
   char message[100];
   int air_quality;
   static struct etimer before_start;
-  linkaddr_t *forward_address = NULL;
 
   PROCESS_EXITHANDLER(runicast_close(&runicast);)
     
@@ -273,18 +284,6 @@ PROCESS_THREAD(send_sensor_data, ev, data)
     
     // Send the data to the parent
     if(!not_connected && !runicast_is_transmitting(&runicast)) {
-
-      struct routes *route;
-
-      printf("ROUTES FOR THE MOMENT\n");
-
-      // Print the current routes
-      for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
-      {
-        printf("To contact %d, I have to send to %d\n", route->id, route->addr_fwd.u8[0]);
-        //list_remove(routes_list, route);
-      }
-
 
       // Generate random sensor data
       air_quality = random_rand() % 99 + 1;
@@ -319,7 +318,7 @@ PROCESS_THREAD(forwarding_messages, ev, data)
 
 
   while(1) {
-    
+
       // Wait for SRV / CMD to forward
     PROCESS_WAIT_EVENT();
   

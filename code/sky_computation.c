@@ -8,7 +8,9 @@
 #include <stdio.h>
 
 #define MAX_RETRANSMISSIONS 4
+#define MAX_ROUTES 10
 
+// Utils function for computing the Rime ID
 int power(int a, int b)
 {
   int res = 1;
@@ -19,6 +21,24 @@ int power(int a, int b)
   }
   return res;
 }
+
+
+/* This structure holds information about the routes. */
+struct routes {
+
+  // The ->next pointer is needed for Contiki list
+  struct routes *next;
+
+  // The id that we want to reach
+  int id;
+
+  // Where to forward the message
+  linkaddr_t addr_fwd;
+
+};
+
+MEMB(routes_memb, struct routes, MAX_ROUTES);
+LIST(routes_list);
 
 /*---------------------------------------------------------------------------*/
 PROCESS(network_setup, "Network Setup");
@@ -150,6 +170,44 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       original_sender = original_sender + ((message[i+5]-48) * power(10,size-i-1));
     }
 
+    struct routes *new_route;
+
+    /* Check if we already know this routes. */
+    for(new_route = list_head(routes_list); new_route != NULL; new_route = list_item_next(new_route)) 
+    {
+
+      // We break out of the loop if the address in the list matches with from
+      if((int)new_route->id == (int)original_sender) 
+      {
+        if(linkaddr_cmp(&new_route->addr_fwd, from))
+        {
+          printf("[FORWARDING THREAD] POSSIBLE ERROR fwd_information from %d to %d was not removed\n", original_sender, from->u8[0]);
+          break;
+        }
+      }
+
+    }
+
+    // If new_route is NULL, this node was not found in our list
+    if(new_route == NULL) 
+    {
+      new_route = memb_alloc(&routes_memb);
+
+      // If allocation failed, we give up.
+      if(new_route == NULL) 
+      {
+        return;
+      }
+
+      // Initialize the new_route.
+      linkaddr_copy(&new_route->addr_fwd, from);
+      new_route->id = original_sender;
+
+      // Add the route into the list
+      printf("[ROUTING] New route\n");
+      list_add(routes_list, new_route);
+    }
+
     //printf("[DATA THREAD] Unicast received from %d : Sensor %d - Quality = %d\n", 
     //  from->u8[0], original_sender, air_quality);
 
@@ -165,6 +223,17 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
     // DEBUG PURPOSE
     printf("[FORWARDING THREAD] Weird message received from %d.%d\n", from->u8[0], from->u8[1]);
   }
+
+  /* ===== DEBUG ==== */
+  struct routes *route;
+
+  // Print the current routes
+  for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
+  {
+    printf("[ROUTING] To contact %d, I have to send to %d\n", route->id, route->addr_fwd.u8[0]);
+    //list_remove(routes_list, route);
+  }
+  /* ================ */
 
 }
 
