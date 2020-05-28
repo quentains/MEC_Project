@@ -47,7 +47,8 @@ struct routes {
   // int used to determine whether or not the node is still active
   int age;
 
-  // If = 0 then corresponding child exisist, If = 1 then no corresponding child
+  // If = 0 this is a child
+  // If = 1 this is not a child
   // If = 2 then collecting data before making child
   int is_child;
 
@@ -318,10 +319,16 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
           new_route->is_child = 1;
           number_of_children = MAX_CHILDREN;
         }
-        // Giving values to child attributes
-        new_child->id = original_sender;
-        new_child->nvalues = 0;
-        list_add(children_list, new_child);
+        else
+        {
+          // Giving values to child attributes
+          new_child->id = original_sender;
+          new_child->nvalues = 0;
+          list_add(children_list, new_child);
+        }
+        // Always increment, if there was a memory problem
+        // nevermind, this will set the number_of_children
+        // to the MAX_CHILDREN
         number_of_children += 1;
       }
       else 
