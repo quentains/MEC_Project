@@ -129,6 +129,7 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
   strcpy(message, (char *)packetbuf_dataptr());
   int original_sender = 0;
   size_t size, i;
+  printf("%c%c%c\n", message[0], message[1], message[2]);
 
   // If SRV message, need to forward it to the parent_node
   if (message[0] == 'S' && message[1] == 'R' && message[2] == 'V')

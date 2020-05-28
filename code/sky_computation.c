@@ -98,11 +98,7 @@ struct children* get_children(int id)
   // If the child does not exist, it needs to be created
   if ( child == NULL ) // From 2 to 0
   {
-    struct children *new_child;
-    new_child = memb_alloc(&children_memb);
-    new_child->id = id;
-    new_child->nvalues = 0;
-    list_add(children_list, new_child);
+    printf("requested non-existing child %d\n", id);
   }
   return child;
 }
@@ -130,6 +126,11 @@ void remove_child(int id)
     {
 // As long as is_child = 2 (computation node does not have 30 data points), messages will be forwarded to the server
       route->is_child = 2; 
+      struct children *new_child;
+      new_child = memb_alloc(&children_memb);
+      new_child->id = id;
+      new_child->nvalues = 0;
+      list_add(children_list, new_child);
       break; // only select one
     }
   }
@@ -329,8 +330,8 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       printf("[ROUTING] New node\n");
     }
     new_route->age = 0; // used for deleting routes after they stop communicating
-    if (!linkaddr_cmp(&new_route->addr_fwd, from)) // If routing has changed
-    {
+    //if (!linkaddr_cmp(&new_route->addr_fwd, from)) // If routing has changed
+    //{
       // Initialize the new_route.
       linkaddr_copy(&new_route->addr_fwd, from);
       new_route->id = original_sender;
@@ -338,7 +339,7 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       // Add the route into the list
       printf("[ROUTING] New route\n");
       list_add(routes_list, new_route);
-    }
+    //}
     
     if ( new_route->is_child != 1 )
     {
