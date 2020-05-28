@@ -12,6 +12,10 @@
 #define INACTIVE_DATA_TRANSFERS 4
 #define ID_SIZE 3
 
+// Used to correctly print the id in the messages
+#define STR_(X) #X
+#define STR(X) STR_(X)
+
 // Utils function for computing the Rime ID
 int power(int a, int b)
 {
@@ -91,7 +95,7 @@ recv_bdcst(struct broadcast_conn *c, const linkaddr_t *from)
     if (!not_connected)
     {
       // Respond to the child
-      sprintf(message, "NDR%03d", from->u8[0]);
+      sprintf(message, "NDR%0"STR(ID_SIZE)"d", from->u8[0]);
       packetbuf_copyfrom(message, strlen(message));
       broadcast_send(c);
       printf("[SETUP THREAD] Reponse (NDR) sent : %s\n", message);
@@ -347,7 +351,7 @@ PROCESS_THREAD(send_sensor_data, ev, data)
       // Generate random sensor data
       air_quality = random_rand() % 99 + 1;
       
-      sprintf(message, "SRV%02d%03d", air_quality, linkaddr_node_addr.u8[0]);
+      sprintf(message, "SRV%02d%0"STR(ID_SIZE)"d", air_quality, linkaddr_node_addr.u8[0]);
       packetbuf_copyfrom(message, strlen(message));
 
       runicast_send(&runicast, parent_node, MAX_RETRANSMISSIONS);
