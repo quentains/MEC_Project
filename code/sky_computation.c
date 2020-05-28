@@ -357,8 +357,8 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       else
       {
         new_route->is_child = 0;
-        int value_index = 1;
-        for ( value_index; value_index < NUMBER_OF_SAVED_VALUES; value_index ++ )
+        int value_index;
+        for (value_index = 1; value_index < NUMBER_OF_SAVED_VALUES; value_index ++ )
         {
           this_child->last_values[value_index-1] = this_child->last_values[value_index];
         }
