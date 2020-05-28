@@ -229,12 +229,14 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
 
     //printf("[DATA THREAD] Unicast received from %d : Sensor %d - Quality = %d\n", 
     //  from->u8[0], original_sender, air_quality);
+    if (from->u8[0] != parent_node->u8[0])
+    {
+      // Forward the message to the parent
+      packetbuf_copyfrom(message, strlen(message));
+      runicast_send(c, parent_node, MAX_RETRANSMISSIONS);
 
-    // Forward the message to the parent
-    packetbuf_copyfrom(message, strlen(message));
-    runicast_send(c, parent_node, MAX_RETRANSMISSIONS);
-
-    printf("[FORWARDING THREAD] Forwarding from %d to %d (%s)\n", from->u8[0], parent_node->u8[0], message);
+      printf("[FORWARDING THREAD] Forwarding from %d to %d (%s)\n", from->u8[0], parent_node->u8[0], message);
+    }
 
   }
   else if (message[0] == 'C' && message[1] == 'O' && message[2] == 'M')

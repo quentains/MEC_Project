@@ -9,7 +9,7 @@
 
 #define MAX_RETRANSMISSIONS 4
 #define MAX_ROUTES 10
-#define INACTIVE_ORDERS 30
+#define INACTIVE_ORDERS 10
 
 // Utils function for computing the Rime ID
 int power(int a, int b)
@@ -226,7 +226,7 @@ PROCESS_THREAD(send_orders, ev, data)
     if(!runicast_is_transmitting(&runicast)) {
 
       // TODO : Get this from the python server
-      destination = 5;
+      destination = 4;
       order = 1;
 
       sprintf(message, "COM%d0%d", order, destination);

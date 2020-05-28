@@ -6,12 +6,13 @@
 #include "lib/random.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #define MAX_RETRANSMISSIONS 4
 #define MAX_ROUTES 10
 #define INACTIVE_MESSAGE 20
-#define NUMBER_OF_SAVED_VALUES 30
-#define MAX_CHILDREN 5
+#define NUMBER_OF_SAVED_VALUES 5 //TODO change to 30
+#define MAX_CHILDREN 2 //TODO change to 5
 
 // Utils function for computing the Rime ID
 int power(int a, int b)
@@ -57,6 +58,9 @@ struct children {
   // Values from sensors
   int last_values[NUMBER_OF_SAVED_VALUES];
 
+  //number of values stored
+  int nvalues;
+
 };
 
 
@@ -75,25 +79,7 @@ static int not_connected = 1;
 static int parent_signal = -9999;
 static int number_of_children = 0;
 
-void remove_old_routes()
-{
-  struct routes *route;
-
-  for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
-  {
-    if(INACTIVE_MESSAGE <= (int) route->age ) 
-    {
-      printf("removed route \n");
-      list_remove(routes_list, route);
-    }
-    else 
-    {
-      route->age += 1;
-    }
-  }
-}
-
-struct children get_children(int id)
+struct children* get_children(int id)
 {
   struct children *child;
   for(child = list_head(children_list); child != NULL; child = list_item_next(child))
@@ -103,11 +89,15 @@ struct children get_children(int id)
       break;
     }
   }
-  if ( child == NULL )
+  if ( child == NULL ) // From 2 to 0
   {
-    printf("THE CHILD FUNCTION WAS ACCESSED FOR A CHILD: %d THAT DOES NOT EXIST", id);
+    struct children *new_child;
+    new_child = memb_alloc(&children_memb);
+    new_child->id = id;
+    new_child->nvalues = 0;
+    list_add(children_list, new_child);
   }
-  return *child;
+  return child;
 }
 
 void remove_child(int id)
@@ -117,13 +107,9 @@ void remove_child(int id)
   {
     if ( child->id == id )
     {
-      printf("removed route \n");
+      printf("removed child \n");
       list_remove(children_list, child);
     }
-  }
-  if ( child == NULL )
-  {
-    printf("FAILED TO REMOVE CHILD: %d ", id);
   }
   struct routes *route;
 
@@ -132,6 +118,29 @@ void remove_child(int id)
     if(route->is_child == 1) // Can't just be !route->is_child
     {
       route->is_child = 2;
+      break;
+    }
+  }
+}
+
+void remove_old_routes()
+{
+  struct routes *route;
+
+  for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
+  {
+    if(INACTIVE_MESSAGE <= (int) route->age ) 
+    {
+      printf("removed route \n");
+      if (route->is_child != 1) // Can't just be route->is_child
+      {
+        remove_child(route->id);
+      }
+      list_remove(routes_list, route);
+    }
+    else 
+    {
+      route->age += 1;
     }
   }
 }
@@ -286,8 +295,15 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
         new_route->is_child = 0;
         struct children *new_child;
         new_child = memb_alloc(&children_memb);
+        if (new_child == NULL)
+        {
+          new_route->is_child = 1;
+          number_of_children = MAX_CHILDREN;
+        }
         new_child->id = original_sender;
+        new_child->nvalues = 0;
         list_add(children_list, new_child);
+        number_of_children += 1;
       }
       else 
       {
@@ -306,15 +322,41 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       printf("[ROUTING] New route\n");
       list_add(routes_list, new_route);
     }
+    
+    if ( new_route->is_child != 1 )
+    {
+      //STORE THE SENSOR INFO
+      int data = rand() % 10;   //THIS SHOULD BE FROM MESSAGE
+      struct children *this_child;
+      this_child = get_children(original_sender);
+      if (this_child->nvalues < NUMBER_OF_SAVED_VALUES){
+        this_child->last_values[this_child->nvalues] = data;
+        this_child->nvalues += 1;
+      }
+      else
+      {
+        new_route->is_child = 0;
+        int value_index = 1;
+        for ( value_index; value_index < NUMBER_OF_SAVED_VALUES; value_index ++ )
+        {
+          this_child->last_values[value_index-1] = this_child->last_values[value_index];
+        }
+        this_child->last_values[this_child->nvalues-1] = data;
+      }
+    }
+    if ( new_route->is_child != 0 )
+    {
+      // Forward the message to the parent
+      packetbuf_copyfrom(message, strlen(message));
+      runicast_send(c, parent_node, MAX_RETRANSMISSIONS);
 
-    //printf("[DATA THREAD] Unicast received from %d : Sensor %d - Quality = %d\n", 
-    //  from->u8[0], original_sender, air_quality);
-
-    // Forward the message to the parent
-    packetbuf_copyfrom(message, strlen(message));
-    runicast_send(c, parent_node, MAX_RETRANSMISSIONS);
-
-    printf("[FORWARDING THREAD] [TO SERVER] Forwarding from %d to %d (%s)\n", from->u8[0], parent_node->u8[0], message);
+      printf("[FORWARDING THREAD] [TO SERVER] Forwarding from %d to %d (%s)\n", from->u8[0], parent_node->u8[0], message);
+    }
+    if ( new_route->is_child == 0 ) // AND 30 Values
+    {
+      // COMPUTE SLOPE
+      // RESPOND TO MESSAGE
+    }
 
   }
   else if (message[0] == 'C' && message[1] == 'O' && message[2] == 'M')
@@ -360,7 +402,7 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
   // Print the current routes
   for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
   {
-    printf("[ROUTING] To contact %d, I have to send to %d\n", route->id, route->addr_fwd.u8[0]);
+    printf("[ROUTING] To contact %d (child:%d), I have to send to %d\n", route->id, route->is_child, route->addr_fwd.u8[0]);
     //list_remove(routes_list, route);
   }
   /* ================ */
