@@ -13,6 +13,7 @@
 #define INACTIVE_MESSAGE 20
 #define NUMBER_OF_SAVED_VALUES 5 //TODO change to 30
 #define MAX_CHILDREN 2 //TODO change to 5
+#define ID_SIZE 3
 
 // Utils function for computing the Rime ID
 int power(int a, int b)
@@ -176,7 +177,7 @@ recv_bdcst(struct broadcast_conn *c, const linkaddr_t *from)
     if (!not_connected)
     {
       // Respond to the child
-      sprintf(message, "NDR%d", from->u8[0]);
+      sprintf(message, "NDR%03d", from->u8[0]);
       packetbuf_copyfrom(message, strlen(message));
       broadcast_send(c);
       printf("[SETUP THREAD] Reponse (NDR) sent : %s\n", message);
@@ -187,14 +188,13 @@ recv_bdcst(struct broadcast_conn *c, const linkaddr_t *from)
   // If response to an announce
   else if (message[0] == 'N' && message[1] == 'D' && message[2] == 'R')
   {
-    size_t size, i;
+    size_t i;
     int recipient = 0;
-    size = strlen(message) - 3;
 
     // Compute the recipient from the radio message
-    for(i = 0 ; i < size ; i++)
+    for(i = 0 ; i < ID_SIZE ; i++)
     {
-      recipient = recipient + ((message[i+3]-48) * power(10,size-i-1));
+      recipient = recipient + ((message[i+3]-48) * power(10,ID_SIZE-i-1));
     }
 
     // If the message is for this node (avoid broadcast loop)
@@ -261,7 +261,7 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
   char message[10];
   strcpy(message, (char *)packetbuf_dataptr());
   int original_sender = 0;
-  size_t size, i;
+  size_t i;
   
   printf("%c%c%c\n", message[0], message[1], message[2]);
   
@@ -271,13 +271,10 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
     // Get the air quality
     //int air_quality = (message[3]-48) * 10 + (message[4]-48);
 
-    // Get the size of the address (e.g. "1" or "78" or "676")
-    size = strlen(message) - 5;
-
     // Get the address of the original sender
-    for(i = 0 ; i < size ; i++)
+    for(i = 0 ; i < ID_SIZE ; i++)
     {
-      original_sender = original_sender + ((message[i+5]-48) * power(10,size-i-1));
+      original_sender = original_sender + ((message[i+5]-48) * power(10,ID_SIZE-i-1));
     }
 
     struct routes *new_route;
@@ -382,16 +379,14 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
   }
   else if (message[0] == 'C' && message[1] == 'O' && message[2] == 'M')
   {
-    // Get the size of the address (e.g. "1" or "78" or "676")
-    size = strlen(message) - 5;
     int recipient = 0;    
     int order = message[3] - '0';
     struct routes *route;
 
     // Get the address of the message recipient 
-    for(i = 0 ; i < size ; i++)
+    for(i = 0 ; i < ID_SIZE ; i++)
     {
-      recipient = recipient + ((message[i+5]-48) * power(10,size-i-1));
+      recipient = recipient + ((message[i+4]-48) * power(10,ID_SIZE-i-1));
     }
 
     // gets the rigth route
