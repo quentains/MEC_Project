@@ -48,6 +48,7 @@ struct routes {
 
 };
 
+// Holding information about the children (the ones with data)
 struct children {
   // The ->next pointer is needed for Contiki list
   struct children *next;
@@ -63,9 +64,11 @@ struct children {
 
 };
 
-
+// memory allocation for routes
 MEMB(routes_memb, struct routes, MAX_ROUTES);
 LIST(routes_list);
+
+// memory allocation for children
 MEMB(children_memb, struct children, MAX_CHILDREN);
 LIST(children_list);
 
@@ -79,6 +82,9 @@ static int not_connected = 1;
 static int parent_signal = -9999;
 static int number_of_children = 0;
 
+// Used to get a children using RIME id. 
+// When a new child is created, it might not be in the list already.
+// This function creates any new child that does not yet exist.
 struct children* get_children(int id)
 {
   struct children *child;
@@ -89,6 +95,7 @@ struct children* get_children(int id)
       break;
     }
   }
+  // If the child does not exist, it needs to be created
   if ( child == NULL ) // From 2 to 0
   {
     struct children *new_child;
@@ -100,6 +107,9 @@ struct children* get_children(int id)
   return child;
 }
 
+// Used to remove a child
+// It is called when a child stops communication by remove_old_routes()
+// This function selects a new child to replace the removed one from the list of routes
 void remove_child(int id)
 {
   struct children *child;
@@ -111,18 +121,22 @@ void remove_child(int id)
       list_remove(children_list, child);
     }
   }
+  // Selecting new child
   struct routes *route;
 
   for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
   {
     if(route->is_child == 1) // Can't just be !route->is_child
     {
-      route->is_child = 2;
-      break;
+// As long as is_child = 2 (computation node does not have 30 data points), messages will be forwarded to the server
+      route->is_child = 2; 
+      break; // only select one
     }
   }
 }
 
+// This function is used to remove a node that has stopped communicating for a while.
+// It uses the INACTIVE_MESSAGE constant
 void remove_old_routes()
 {
   struct routes *route;
@@ -290,28 +304,31 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
         return;
       }
 
+      // IF there is space left for a child
       if (number_of_children < MAX_CHILDREN)
       {
+        //Creating the child
         new_route->is_child = 0;
         struct children *new_child;
         new_child = memb_alloc(&children_memb);
-        if (new_child == NULL)
+        if (new_child == NULL) // If there is an error / no memory left
         {
           new_route->is_child = 1;
           number_of_children = MAX_CHILDREN;
         }
+        // Giving values to child attributes
         new_child->id = original_sender;
         new_child->nvalues = 0;
         list_add(children_list, new_child);
         number_of_children += 1;
       }
       else 
-      {
+      { // If there are too many children
         new_route->is_child = 1;
       }
       printf("[ROUTING] New node\n");
     }
-    new_route->age = 0;
+    new_route->age = 0; // used for deleting routes after they stop communicating
     if (!linkaddr_cmp(&new_route->addr_fwd, from)) // If routing has changed
     {
       // Initialize the new_route.
@@ -326,13 +343,16 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
     if ( new_route->is_child != 1 )
     {
       //STORE THE SENSOR INFO
-      int data = rand() % 10;   //THIS SHOULD BE FROM MESSAGE
+      int data = rand() % 10;   //TODO THIS SHOULD BE FROM MESSAGE
       struct children *this_child;
       this_child = get_children(original_sender);
+
+      // When the array is not full, append data
       if (this_child->nvalues < NUMBER_OF_SAVED_VALUES){
         this_child->last_values[this_child->nvalues] = data;
         this_child->nvalues += 1;
       }
+      // When the array is full, shift all values left and then append
       else
       {
         new_route->is_child = 0;
@@ -345,7 +365,7 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       }
     }
     if ( new_route->is_child != 0 )
-    {
+    {  //TODO this does not seem to make it to the border node
       // Forward the message to the parent
       packetbuf_copyfrom(message, strlen(message));
       runicast_send(c, parent_node, MAX_RETRANSMISSIONS);
@@ -353,7 +373,7 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       printf("[FORWARDING THREAD] [TO SERVER] Forwarding from %d to %d (%s)\n", from->u8[0], parent_node->u8[0], message);
     }
     if ( new_route->is_child == 0 ) // AND 30 Values
-    {
+    {  //TODO the maths
       // COMPUTE SLOPE
       // RESPOND TO MESSAGE
     }
@@ -367,13 +387,13 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
     int order = message[3] - '0';
     struct routes *route;
 
-    // Get the address of the original sender
+    // Get the address of the message recipient 
     for(i = 0 ; i < size ; i++)
     {
       recipient = recipient + ((message[i+5]-48) * power(10,size-i-1));
     }
 
-    // Print the current routes
+    // gets the rigth route
     for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
     {
       // We break out of the loop if the address in the list matches with from

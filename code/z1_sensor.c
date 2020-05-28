@@ -54,6 +54,8 @@ static linkaddr_t *parent_node;
 static int not_connected = 1;
 static int parent_signal = -9999;
 
+// This function is used to remove a node that has stopped communicating for a while.
+// It uses the INACTIVE_DATA_TRANSFERS constant
 void remove_old_routes()
 {
   struct routes *route;
@@ -114,11 +116,10 @@ recv_bdcst(struct broadcast_conn *c, const linkaddr_t *from)
     {
       printf("[SETUP THREAD] Parent response received from %d with signal %d\n", from->u8[0], packetbuf_attr(PACKETBUF_ATTR_RSSI));
 
-      if (packetbuf_attr(PACKETBUF_ATTR_RSSI) > parent_signal)
+      if (packetbuf_attr(PACKETBUF_ATTR_RSSI) > parent_signal) // If the sender want his message back for some reason
       {
         printf("[SETUP THREAD] This parent is better than %d\n", parent_signal);
         parent_signal = packetbuf_attr(PACKETBUF_ATTR_RSSI);
-        //from = memb_alloc(&linkaddr_memb);
         linkaddr_copy(parent_node, from);
         not_connected = 0;
       }
@@ -252,10 +253,13 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       recipient = recipient + ((message[i+5]-48) * power(10,size-i-1));
     }
 
+    // If the message is for me
     if(recipient == linkaddr_node_addr.u8[0])
     {
       printf("I was ordered by %d to follow order %d (%s)\n", from->u8[0], order, message);
+      // TODO do something about it
     }
+    // If the message is not for me
     else
     {
       struct routes *route;

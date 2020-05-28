@@ -50,6 +50,9 @@ PROCESS(receive_data, "Receive SRV messages");
 PROCESS(send_orders, "Send COM messages");
 AUTOSTART_PROCESSES(&network_setup, &receive_data, &send_orders);
 
+
+// This function is used to remove a node that has stopped communicating for a while.
+// It uses the INACTIVE_ORDERS constant
 void remove_old_routes()
 {
   struct routes *route;
@@ -151,7 +154,6 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       // We break out of the loop if the address in the list matches with from
       if((int)new_route->id == (int)original_sender) 
       {
-          //printf("[FORWARDING THREAD] POSSIBLE ERROR fwd_information from %d to %d was not removed\n", original_sender, from->u8[0]);
           break;
       }
 
@@ -196,7 +198,6 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
   for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
   {
     printf("[ROUTING] To contact %d, I have to send to %d\n", route->id, route->addr_fwd.u8[0]);
-    //list_remove(routes_list, route);
   }
   /* ================ */
 
