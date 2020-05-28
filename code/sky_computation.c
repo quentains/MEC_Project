@@ -114,31 +114,43 @@ struct children* get_children(int id)
 // This function selects a new child to replace the removed one from the list of routes
 void remove_child(int id)
 {
+
+  // Looking for the child to delete
   struct children *child;
   for(child = list_head(children_list); child != NULL; child = list_item_next(child))
   {
     if ( child->id == id )
     {
       printf("removed child \n");
-      list_remove(children_list, child);
+      // We don't really remove it now, maybe we will re-use it juste after
+      break;
     }
   }
-  // Selecting new child
+
+
   struct routes *route;
 
+  // If a sensor (*) communicate with the server, wait to have 30 data messages
   for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
   {
     if(route->is_child == 1) // Can't just be !route->is_child
     {
-// As long as is_child = 2 (computation node does not have 30 data points), messages will be forwarded to the server
+      // As long as is_child = 2 (computation node does not have 30 data points), 
+      // messages will be forwarded to the server
+
+      // We re-use the previous child (the child to delete)
       route->is_child = 2; 
-      struct children *new_child;
-      new_child = memb_alloc(&children_memb);
-      new_child->id = id;
-      new_child->nvalues = 0;
-      list_add(children_list, new_child);
+      child->id = route->id;
+      child->nvalues = 0;
       break; // only select one
     }
+  }
+  // If there are no one (*) , remove a child from the counter
+  // and we really delete the child
+  if(route == NULL)
+  {
+    number_of_children--;
+    list_remove(children_list, child);
   }
 }
 
@@ -150,6 +162,7 @@ void remove_old_routes()
 
   for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
   {
+    // If no more message since a long time, the route can be deleted
     if(INACTIVE_MESSAGE <= (int) route->age ) 
     {
       printf("removed route \n");
@@ -159,6 +172,7 @@ void remove_old_routes()
       }
       list_remove(routes_list, route);
     }
+    // Else, increase its age
     else 
     {
       route->age += 1;
@@ -273,9 +287,6 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
   // If SRV message, need to forward it to the parent_node
   if (message[0] == 'S' && message[1] == 'R' && message[2] == 'V')
   {
-    // Get the air quality
-    //int air_quality = (message[3]-48) * 10 + (message[4]-48);
-
     // Get the address of the original sender
     for(i = 0 ; i < ID_SIZE ; i++)
     {
