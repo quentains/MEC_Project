@@ -38,7 +38,7 @@ if __name__ == '__main__':
     sensor_data = {}
     sensor_timer = {}
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind(('127.0.0.1', SOCKET_PORT))
+    s.bind(('', SOCKET_PORT))
     s.listen()
     while True:
         c, addr = s.accept()
@@ -57,12 +57,13 @@ if __name__ == '__main__':
             sensor_data[target_id] = rotate_value(sensor_data[target_id], new_value, now) #Update data
 
             slope = get_slope(sensor_data[target_id])
+            print(slope)
             if sensor_timer[target_id] != -1 and now - sensor_timer[target_id] >= VALVE_OPENING_TIME: #Need to re-evaluate the valve
                 if slope is not None and slope < SLOPE_THRESHOLD: #We can close the valve
                     send_order(c, target_id, "close")
                     sensor_timer[target_id] = -1
                 else: #we keep it open for another 10 mins
                     sensor_timer[target_id] = now
-            elif sensor_timer[target_id] == -1 and slope is not None and slope >= SLOPE_THRESHOLD: #Need to open the valve
+            elif sensor_timer[target_id] == -1 and slope is not None and slope > SLOPE_THRESHOLD: #Need to open the valve
                 send_order(c, target_id, "open")
                 sensor_timer[target_id] = now
