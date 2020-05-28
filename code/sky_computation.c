@@ -15,6 +15,10 @@
 #define MAX_CHILDREN 2 //TODO change to 5
 #define ID_SIZE 3
 
+// Used to correctly print the id in the messages
+#define STR_(X) #X
+#define STR(X) STR_(X)
+
 // Utils function for computing the Rime ID
 int power(int a, int b)
 {
@@ -177,7 +181,7 @@ recv_bdcst(struct broadcast_conn *c, const linkaddr_t *from)
     if (!not_connected)
     {
       // Respond to the child
-      sprintf(message, "NDR%03d", from->u8[0]);
+      sprintf(message, "NDR%0"STR(ID_SIZE)"d", from->u8[0]);
       packetbuf_copyfrom(message, strlen(message));
       broadcast_send(c);
       printf("[SETUP THREAD] Reponse (NDR) sent : %s\n", message);

@@ -4,6 +4,7 @@
 #include "lib/list.h"
 #include "lib/memb.h"
 #include "lib/random.h"
+#include "leds.h"
 
 #include <stdio.h>
 
@@ -11,6 +12,10 @@
 #define MAX_ROUTES 10
 #define INACTIVE_DATA_TRANSFERS 4
 #define ID_SIZE 3
+
+// Used to correctly print the id in the messages
+#define STR_(X) #X
+#define STR(X) STR_(X)
 
 // Utils function for computing the Rime ID
 int power(int a, int b)
@@ -91,7 +96,7 @@ recv_bdcst(struct broadcast_conn *c, const linkaddr_t *from)
     if (!not_connected)
     {
       // Respond to the child
-      sprintf(message, "NDR%03d", from->u8[0]);
+      sprintf(message, "NDR%0"STR(ID_SIZE)"d", from->u8[0]);
       packetbuf_copyfrom(message, strlen(message));
       broadcast_send(c);
       printf("[SETUP THREAD] Reponse (NDR) sent : %s\n", message);
@@ -252,7 +257,19 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
     if(recipient == linkaddr_node_addr.u8[0])
     {
       printf("I was ordered by %d to follow order %d (%s)\n", from->u8[0], order, message);
-      // TODO do something about it
+      // To simulate the valve, we used LEDs
+      if(order == 1)
+      {
+        // If the valve is open, the green led is on
+        leds_off(LEDS_RED);
+        leds_on(LEDS_GREEN);
+      }
+      else
+      {
+        // If the valve is close, the red led is on
+        leds_on(LEDS_RED);
+        leds_off(LEDS_GREEN);
+      }
     }
     // If the message is not for me
     else
@@ -329,6 +346,10 @@ PROCESS_THREAD(send_sensor_data, ev, data)
     
   PROCESS_BEGIN();
 
+  // Simulate that the valve is closed (red led on)
+  leds_off(LEDS_ALL);
+  leds_on(LEDS_RED);
+
   runicast_open(&runicast, 144, &runicast_callbacks);
 
   /* Wait random seconds to simulate the different time
@@ -347,7 +368,7 @@ PROCESS_THREAD(send_sensor_data, ev, data)
       // Generate random sensor data
       air_quality = random_rand() % 99 + 1;
       
-      sprintf(message, "SRV%02d%03d", air_quality, linkaddr_node_addr.u8[0]);
+      sprintf(message, "SRV%02d%0"STR(ID_SIZE)"d", air_quality, linkaddr_node_addr.u8[0]);
       packetbuf_copyfrom(message, strlen(message));
 
       runicast_send(&runicast, parent_node, MAX_RETRANSMISSIONS);
