@@ -9,6 +9,7 @@
 
 #define MAX_RETRANSMISSIONS 4
 #define MAX_ROUTES 10
+#define INACTIVE_DATA_TRANSFERS 4
 
 // Utils function for computing the Rime ID
 int power(int a, int b)
@@ -35,6 +36,9 @@ struct routes {
   // Where to forward the message
   linkaddr_t addr_fwd;
 
+  // int used to determine whether or not the node is still active
+  int age;
+
 };
 
 MEMB(routes_memb, struct routes, MAX_ROUTES);
@@ -46,10 +50,27 @@ PROCESS(send_sensor_data, "Send Sensor Data");
 PROCESS(forwarding_messages, "Forwarding SRV & COM");
 AUTOSTART_PROCESSES(&network_setup, &send_sensor_data, &forwarding_messages);
 
-//MEMB(linkaddr_memb, linkaddr_t, 1);
 static linkaddr_t *parent_node;
 static int not_connected = 1;
 static int parent_signal = -9999;
+
+void remove_old_routes()
+{
+  struct routes *route;
+
+  for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
+  {
+    if(INACTIVE_DATA_TRANSFERS <= (int) route->age ) 
+    {
+      printf("removed route \n");
+      list_remove(routes_list, route);
+    }
+    else 
+    {
+      route->age += 1;
+    }
+  }
+}
 
 /*---------------------------------------------------------------------------*/
 static void
@@ -165,7 +186,7 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
     size = strlen(message) - 5;
 
     // Get the address of the original sender
-    for(i = 0 ; i < size ; i++) //TODO for (i=5;i<size;i++)
+    for(i = 0 ; i < size ; i++) 
     {
       original_sender = original_sender + ((message[i+5]-48) * power(10,size-i-1));
     }
@@ -179,11 +200,7 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       // We break out of the loop if the address in the list matches with from
       if((int)new_route->id == (int)original_sender) 
       {
-        if(linkaddr_cmp(&new_route->addr_fwd, from))
-        {
-          printf("[FORWARDING THREAD] POSSIBLE ERROR fwd_information from %d to %d was not removed\n", original_sender, from->u8[0]);
           break;
-        }
       }
 
     }
@@ -198,11 +215,13 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       {
         return;
       }
-
+    }
+    new_route->age = 0;
+    if (!linkaddr_cmp(&new_route->addr_fwd, from)) // If routing has changed
+    {
       // Initialize the new_route.
       linkaddr_copy(&new_route->addr_fwd, from);
       new_route->id = original_sender;
-
       // Add the route into the list
       printf("[ROUTING] New route\n");
       list_add(routes_list, new_route);
@@ -217,6 +236,45 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
 
     printf("[FORWARDING THREAD] Forwarding from %d to %d (%s)\n", from->u8[0], parent_node->u8[0], message);
 
+  }
+  else if (message[0] == 'C' && message[1] == 'O' && message[2] == 'M')
+  {
+    // Get the size of the address (e.g. "1" or "78" or "676")
+    size = strlen(message) - 5;
+    int recipient = 0;    
+    int order = message[3] - '0';
+
+    // Get the address of the original sender
+    for(i = 0 ; i < size ; i++)
+    {
+      recipient = recipient + ((message[i+5]-48) * power(10,size-i-1));
+    }
+
+    if(recipient == linkaddr_node_addr.u8[0])
+    {
+      printf("I was ordered by %d to follow order %d (%s)\n", from->u8[0], order, message);
+    }
+    else
+    {
+      struct routes *route;
+
+      // Print the current routes
+      for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
+      {
+        // We break out of the loop if the address in the list matches with from
+        if((int)route->id == (int)recipient) 
+        {
+          break;
+        }
+      }
+
+      // Forward the message to the parent
+      packetbuf_copyfrom(message, strlen(message));
+      runicast_send(c, &route->addr_fwd, MAX_RETRANSMISSIONS);
+      
+      printf("[FORWARDING THREAD] [TO NODE] Order: %d received from %d for %d (%s)\n", order, from->u8[0], recipient, message);
+    }
+    
   }
   else
   {
@@ -295,6 +353,7 @@ PROCESS_THREAD(send_sensor_data, ev, data)
 
       printf("[DATA THREAD] Sending data (%d) to the server\n", air_quality);
     }
+    remove_old_routes();
 
     /* Delay 1 minute */
     etimer_set(&et, 60*CLOCK_SECOND);

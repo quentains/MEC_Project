@@ -9,6 +9,7 @@
 
 #define MAX_RETRANSMISSIONS 4
 #define MAX_ROUTES 10
+#define INACTIVE_ORDERS 30
 
 // Utils function for computing the Rime ID
 int power(int a, int b)
@@ -35,6 +36,9 @@ struct routes {
   // Where to forward the message
   linkaddr_t addr_fwd;
 
+  // int used to determine whether or not the node is still active
+  int age;
+
 };
 
 MEMB(routes_memb, struct routes, MAX_ROUTES);
@@ -45,6 +49,24 @@ PROCESS(network_setup, "Network Setup");
 PROCESS(receive_data, "Receive SRV messages");
 PROCESS(send_orders, "Send COM messages");
 AUTOSTART_PROCESSES(&network_setup, &receive_data, &send_orders);
+
+void remove_old_routes()
+{
+  struct routes *route;
+
+  for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
+  {
+    if(INACTIVE_ORDERS <= (int) route->age ) 
+    {
+      printf("removed route \n");
+      list_remove(routes_list, route);
+    }
+    else 
+    {
+      route->age += 1;
+    }
+  }
+}
 
 /*---------------------------------------------------------------------------*/
 static void
@@ -129,11 +151,8 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       // We break out of the loop if the address in the list matches with from
       if((int)new_route->id == (int)original_sender) 
       {
-        if(linkaddr_cmp(&new_route->addr_fwd, from))
-        {
-          printf("[FORWARDING THREAD] POSSIBLE ERROR fwd_information from %d to %d was not removed\n", original_sender, from->u8[0]);
+          //printf("[FORWARDING THREAD] POSSIBLE ERROR fwd_information from %d to %d was not removed\n", original_sender, from->u8[0]);
           break;
-        }
       }
 
     }
@@ -148,7 +167,10 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       {
         return;
       }
-
+    }
+    new_route->age = 0;
+    if (!linkaddr_cmp(&new_route->addr_fwd, from)) // If routing has changed
+    {
       // Initialize the new_route.
       linkaddr_copy(&new_route->addr_fwd, from);
       new_route->id = original_sender;
@@ -185,6 +207,64 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
 static const struct runicast_callbacks runicast_callbacks = {recv_ruc};
 static struct runicast_conn runicast;
 
+
+PROCESS_THREAD(send_orders, ev, data)
+{
+  char message[10];
+  int order, destination;
+
+  PROCESS_EXITHANDLER(runicast_close(&runicast);)
+    
+  PROCESS_BEGIN();
+
+  runicast_open(&runicast, 144, &runicast_callbacks);
+
+  while(1) {
+    static struct etimer et;
+    
+    // Send the data to the parent
+    if(!runicast_is_transmitting(&runicast)) {
+
+      // TODO : Get this from the python server
+      destination = 5;
+      order = 1;
+
+      sprintf(message, "COM%d0%d", order, destination);
+      packetbuf_copyfrom(message, strlen(message));
+
+      struct routes *route;
+      /* Check if we already know this routes. */
+      for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
+      {
+        // We break out of the loop if the address in the list matches with from
+        if((int)route->id == (int)destination) 
+        {
+          break;
+        }
+
+      }
+
+      // If new_route is NULL, this node was not found in our list
+      if(NULL == route)
+      {
+        printf("[ORDER] No route for node %d\n", destination);
+      }
+      else 
+      {
+        runicast_send(&runicast, &route->addr_fwd, MAX_RETRANSMISSIONS);
+        printf("[ORDER] Sending order %d to the node %d (%s)\n", order, route->addr_fwd.u8[0], message);
+      }
+    }
+    
+    remove_old_routes();
+    /* Delay 1 minute */
+    etimer_set(&et, (random_rand()%20)*CLOCK_SECOND + 10);
+    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
+
+  }
+
+  PROCESS_END();
+}
 /*---------------------------------------------------------------------------*/
 PROCESS_THREAD(receive_data, ev, data)
 {
@@ -205,67 +285,3 @@ PROCESS_THREAD(receive_data, ev, data)
 }
 
 /*---------------------------------------------------------------------------*/
-
-PROCESS_THREAD(send_orders, ev, data)
-{
-  char message[10];
-  int order, destination;
-
-  PROCESS_EXITHANDLER(runicast_close(&runicast);)
-    
-  PROCESS_BEGIN();
-
-  runicast_open(&runicast, 144, &runicast_callbacks);
-
-  while(1) {
-    static struct etimer et;
-    
-    // Send the data to the parent
-    if(!runicast_is_transmitting(&runicast)) {
-
-      // TODO : Get this from the python server
-      destination = 3;
-      order = 1;
-
-      sprintf(message, "COM%d%d", order, destination);
-      packetbuf_copyfrom(message, strlen(message));
-
-      linkaddr_t *next_node = NULL;
-
-      struct routes *route;
-      int found = 0;
-      /* Check if we already know this routes. */
-      for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
-      {
-        // We break out of the loop if the address in the list matches with from
-        if((int)route->id == (int)destination) 
-        {
-          found = 1;
-          if(linkaddr_cmp(next_node, &route->addr_fwd))
-          {
-            break;
-          }
-        }
-
-      }
-
-      // If new_route is NULL, this node was not found in our list
-      if(!found)
-      {
-        printf("[ORDER] No route for node %d\n", destination);
-      }
-      else 
-      {
-        runicast_send(&runicast, next_node, MAX_RETRANSMISSIONS);
-        printf("[ORDER] Sending order %d to the node %d (%s)\n", order, destination, message);
-      }
-    }
-
-    /* Delay 1 minute */
-    etimer_set(&et, (random_rand()%20)*CLOCK_SECOND + 10);
-    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
-
-  }
-
-  PROCESS_END();
-}
