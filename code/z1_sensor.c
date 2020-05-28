@@ -4,6 +4,7 @@
 #include "lib/list.h"
 #include "lib/memb.h"
 #include "lib/random.h"
+#include "leds.h"
 
 #include <stdio.h>
 
@@ -256,7 +257,19 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
     if(recipient == linkaddr_node_addr.u8[0])
     {
       printf("I was ordered by %d to follow order %d (%s)\n", from->u8[0], order, message);
-      // TODO do something about it
+      // To simulate the valve, we used LEDs
+      if(order == 1)
+      {
+        // If the valve is open, the green led is on
+        leds_off(LEDS_RED);
+        leds_on(LEDS_GREEN);
+      }
+      else
+      {
+        // If the valve is close, the red led is on
+        leds_on(LEDS_RED);
+        leds_off(LEDS_GREEN);
+      }
     }
     // If the message is not for me
     else
@@ -332,6 +345,10 @@ PROCESS_THREAD(send_sensor_data, ev, data)
   PROCESS_EXITHANDLER(runicast_close(&runicast);)
     
   PROCESS_BEGIN();
+
+  // Simulate that the valve is closed (red led on)
+  leds_off(LEDS_ALL);
+  leds_on(LEDS_RED);
 
   runicast_open(&runicast, 144, &runicast_callbacks);
 
