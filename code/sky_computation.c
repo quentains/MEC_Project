@@ -348,8 +348,8 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       printf("[ROUTING] New node\n");
     }
     new_route->age = 0; // used for deleting routes after they stop communicating
-    //if (!linkaddr_cmp(&new_route->addr_fwd, from)) // If routing has changed
-    //{
+    if (!linkaddr_cmp(&new_route->addr_fwd, from)) // If routing has changed
+    {
       // Initialize the new_route.
       linkaddr_copy(&new_route->addr_fwd, from);
       new_route->id = original_sender;
@@ -357,7 +357,7 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       // Add the route into the list
       printf("[ROUTING] New route\n");
       list_add(routes_list, new_route);
-    //}
+    }
     
     if ( new_route->is_child != 1 )
     {
@@ -382,16 +382,16 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
         }
         this_child->last_values[this_child->nvalues-1] = data;
       }
-    }
+    } // When the message comes from either a node that is not a child (1) or that is becomming a child (2)
     if ( new_route->is_child != 0 )
-    {  //TODO this does not seem to make it to the border node
+    {
       // Forward the message to the parent
       packetbuf_copyfrom(message, strlen(message));
       runicast_send(c, parent_node, MAX_RETRANSMISSIONS);
 
       printf("[FORWARDING THREAD] [TO SERVER] Forwarding from %d to %d (%s)\n", from->u8[0], parent_node->u8[0], message);
-    }
-    if ( new_route->is_child == 0 ) // AND 30 Values
+    } // When the node is a child
+    if ( new_route->is_child == 0 )
     {  //TODO the maths
       // COMPUTE SLOPE
       // RESPOND TO MESSAGE

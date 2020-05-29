@@ -221,15 +221,17 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
     new_route->age = 0;
     if (!linkaddr_cmp(&new_route->addr_fwd, from)) // If routing has changed
     {
+  
       // Initialize the new_route.
       linkaddr_copy(&new_route->addr_fwd, from);
       new_route->id = original_sender;
+  
       // Add the route into the list
       printf("[ROUTING] New route\n");
       list_add(routes_list, new_route);
     }
 
-    if (from->u8[0] != parent_node->u8[0])
+    if (from->u8[0] != parent_node->u8[0]) // fails safe, if a message is i a feedback loop
     {
       // Forward the message to the parent
       packetbuf_copyfrom(message, strlen(message));

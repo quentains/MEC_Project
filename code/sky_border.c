@@ -229,7 +229,7 @@ PROCESS_THREAD(send_orders, ev, data)
     if(!runicast_is_transmitting(&runicast)) {
 
       // TODO : Get this from the python server
-      destination = 4;
+      destination = random_rand()%20;
       order = 1;
 
       sprintf(message, "COM%d%0"STR(ID_SIZE)"d", order, destination);
