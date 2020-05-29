@@ -7,9 +7,16 @@
 
 #include <stdio.h>
 
+// Runicast thing
 #define MAX_RETRANSMISSIONS 4
+
+// The max number of route to save
 #define MAX_ROUTES 30 // Adapt it for your network
+
+// The amount of message to wait before define "inactive"
 #define INACTIVE_ORDERS 10
+
+// Size of the Rime ID in the messages
 #define ID_SIZE 3
 
 // Used to correctly print the id in the messages
@@ -246,8 +253,8 @@ static struct runicast_conn runicast;
 
 PROCESS_THREAD(send_orders, ev, data)
 {
-  char message[10];
-  int order, destination;
+  //char message[10];
+  //int order, destination;
 
   PROCESS_EXITHANDLER(runicast_close(&runicast);)
     

@@ -8,12 +8,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// Runicast thing
 #define MAX_RETRANSMISSIONS 4
+
+// The max number of route to save
 #define MAX_ROUTES 30 // Adapt it for your network
-#define INACTIVE_MESSAGE 20
-#define NUMBER_OF_SAVED_VALUES 5
+
+// The amount of message to wait before define "inactive"
+#define INACTIVE_MESSAGE 20 
+
+// The amount of value to store before computing
+#define NUMBER_OF_SAVED_VALUES 5 
+
+// The number of children that a computation node handle
 #define MAX_CHILDREN 5 // Adapt it for your network
+
+// Size of the Rime ID in the messages
 #define ID_SIZE 3
+
+// The time to left a valve open
+#define OPEN_TIME 10
 
 // Used to correctly print the ID in the messages
 #define STR_(X) #X
@@ -54,6 +68,10 @@ struct children {
 
   //number of values stored
   int nvalues;
+
+  // Variables to know when close a valve (after 10min)
+  int is_open;
+  int time_it_has_been_opened;
 
 };
 
@@ -391,6 +409,7 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
           // Giving values to child attributes
           new_child->id = original_sender;
           new_child->nvalues = 0;
+          new_child->is_open = 0;
           list_add(children_list, new_child);
         }
         // Always increment, if there was a memory problem
@@ -456,11 +475,44 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       {
         printf("Enough data for child %d, computing the slope...\n", this_child->id);
         slope = get_slope(this_child->last_values);
+
+        // If already open, increase the "timer"
+        if (this_child->is_open == 1)
+          this_child->time_it_has_been_opened++;
+
+        // If the valve need to be open
         if( slope > 1.0 )
         {
           printf("The slope is > 1, opening the valve of node %d\n", this_child->id);
-          // Send the order to open the valve
-          send_order(1, this_child->id, c);
+          
+          // Already open
+          if (this_child->is_open == 1)
+          {
+            // Reset the "timer"
+            this_child->time_it_has_been_opened = 0;
+          }
+          else
+          {
+            // If the valve is closed
+            send_order(1, this_child->id, c);
+            this_child->is_open = 1;
+            this_child->time_it_has_been_opened = 0;
+          }
+
+        }
+        // If the valve can be close
+        else
+        {
+          if (this_child->is_open == 1)
+          {
+            // If it has been opened during 10min
+            if (this_child->time_it_has_been_opened >= OPEN_TIME)
+            {
+              // We can close it
+              send_order(0, this_child->id, c);
+              this_child->is_open = 0;
+            }
+          }
         }
       }
     }

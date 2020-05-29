@@ -8,9 +8,15 @@
 
 #include <stdio.h>
 
+// Runicast thing
 #define MAX_RETRANSMISSIONS 4
-#define MAX_ROUTES 10
+
+// The max number of route to save
+#define MAX_ROUTES 30 // Adapt it for your network
+
 #define INACTIVE_DATA_TRANSFERS 4
+
+// Size of the Rime ID in the messages
 #define ID_SIZE 3
 
 // Used to correctly print the id in the messages
