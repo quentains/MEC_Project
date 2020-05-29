@@ -68,6 +68,7 @@ void remove_old_routes()
 
   for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
   {
+    // If no more message since a long time, the route can be deleted
     if(INACTIVE_DATA_TRANSFERS <= (int) route->age ) 
     {
       printf("removed route \n");
@@ -75,6 +76,7 @@ void remove_old_routes()
     }
     else 
     {
+      // Else, increase its age
       route->age += 1;
     }
   }
@@ -121,7 +123,8 @@ recv_bdcst(struct broadcast_conn *c, const linkaddr_t *from)
     {
       printf("[SETUP THREAD] Parent response received from %d with signal %d\n", from->u8[0], packetbuf_attr(PACKETBUF_ATTR_RSSI));
 
-      if (packetbuf_attr(PACKETBUF_ATTR_RSSI) > parent_signal) // If the sender want his message back for some reason
+      // Check if this parent is not better than the actual (based on the signal)
+      if (packetbuf_attr(PACKETBUF_ATTR_RSSI) > parent_signal)
       {
         printf("[SETUP THREAD] This parent is better than %d\n", parent_signal);
         parent_signal = packetbuf_attr(PACKETBUF_ATTR_RSSI);
@@ -164,7 +167,6 @@ PROCESS_THREAD(network_setup, ev, data)
     /* Delay 2-4 seconds */
     etimer_set(&et, CLOCK_SECOND * 4 + random_rand() % (CLOCK_SECOND * 4));
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
-
     
   }
 
@@ -173,7 +175,7 @@ PROCESS_THREAD(network_setup, ev, data)
 
 /*---------------------------------------------------------------------------*/
 
-/* This function is called for every incoming unicast packet. */
+/* This function is called for every incoming runicast packet. */
 static void
 recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
 {
@@ -185,9 +187,6 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
   // If SRV message, need to forward it to the parent_node
   if (message[0] == 'S' && message[1] == 'R' && message[2] == 'V')
   {
-    // Get the air quality
-    //int air_quality = (message[3]-48) * 10 + (message[4]-48);
-
     // Get the address of the original sender
     for(i = 0 ; i < ID_SIZE ; i++) 
     {
@@ -230,8 +229,6 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       list_add(routes_list, new_route);
     }
 
-    //printf("[DATA THREAD] Unicast received from %d : Sensor %d - Quality = %d\n", 
-    //  from->u8[0], original_sender, air_quality);
     if (from->u8[0] != parent_node->u8[0])
     {
       // Forward the message to the parent
@@ -242,6 +239,7 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
     }
 
   }
+  // If order message, forward it or handle it
   else if (message[0] == 'C' && message[1] == 'O' && message[2] == 'M')
   {
     int recipient = 0;    
@@ -286,7 +284,7 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
         }
       }
 
-      // Forward the message to the parent
+      // Finally, forward the message to the parent
       packetbuf_copyfrom(message, strlen(message));
       runicast_send(c, &route->addr_fwd, MAX_RETRANSMISSIONS);
       
@@ -375,6 +373,7 @@ PROCESS_THREAD(send_sensor_data, ev, data)
 
       printf("[DATA THREAD] Sending data (%d) to the server\n", air_quality);
     }
+    // Check if there are some old routes to delete
     remove_old_routes();
 
     /* Delay 1 minute */
@@ -400,7 +399,7 @@ PROCESS_THREAD(forwarding_messages, ev, data)
 
   while(1) {
 
-      // Wait for SRV / CMD to forward
+    // Wait for SRV / CMD to forward
     PROCESS_WAIT_EVENT();
   
   }

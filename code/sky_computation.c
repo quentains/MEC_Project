@@ -9,13 +9,13 @@
 #include <stdlib.h>
 
 #define MAX_RETRANSMISSIONS 4
-#define MAX_ROUTES 10
+#define MAX_ROUTES 30 // Adapt it for your network
 #define INACTIVE_MESSAGE 20
-#define NUMBER_OF_SAVED_VALUES 5 //TODO change to 30
-#define MAX_CHILDREN 2 //TODO change to 5
+#define NUMBER_OF_SAVED_VALUES 30
+#define MAX_CHILDREN 5 // Adapt it for your network
 #define ID_SIZE 3
 
-// Used to correctly print the id in the messages
+// Used to correctly print the ID in the messages
 #define STR_(X) #X
 #define STR(X) STR_(X)
 
@@ -135,7 +135,8 @@ void remove_child(int id)
   {
     if(route->is_child == 1) // Can't just be !route->is_child
     {
-      // As long as is_child = 2 (computation node does not have 30 data points), 
+      // As long as is_child = 2 (computation node does not
+      // have NUMBER_OF_SAVED_VALUES data points), 
       // messages will be forwarded to the server
 
       // We re-use the previous child (the child to delete)
@@ -282,8 +283,6 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
   int original_sender = 0;
   size_t i;
   
-  printf("%c%c%c\n", message[0], message[1], message[2]);
-  
   // If SRV message, need to forward it to the parent_node
   if (message[0] == 'S' && message[1] == 'R' && message[2] == 'V')
   {
@@ -399,6 +398,8 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
     }
 
   }
+
+  // If order message, forward it
   else if (message[0] == 'C' && message[1] == 'O' && message[2] == 'M')
   {
     int recipient = 0;    
@@ -411,7 +412,7 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       recipient = recipient + ((message[i+4]-48) * power(10,ID_SIZE-i-1));
     }
 
-    // gets the rigth route
+    // gets the right route
     for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
     {
       // We break out of the loop if the address in the list matches with from
@@ -444,6 +445,8 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
     //list_remove(routes_list, route);
   }
   /* ================ */
+
+  // Check if there are some old routes to delete
   remove_old_routes();
 
 }

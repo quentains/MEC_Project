@@ -8,7 +8,7 @@
 #include <stdio.h>
 
 #define MAX_RETRANSMISSIONS 4
-#define MAX_ROUTES 10
+#define MAX_ROUTES 30 // Adapt it for your network
 #define INACTIVE_ORDERS 10
 #define ID_SIZE 3
 
@@ -134,7 +134,6 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
   strcpy(message, (char *)packetbuf_dataptr());
   int original_sender = 0;
   size_t i;
-  printf("%c%c%c\n", message[0], message[1], message[2]);
 
   // If SRV message, need to forward it to the parent_node
   if (message[0] == 'S' && message[1] == 'R' && message[2] == 'V')
@@ -259,8 +258,10 @@ PROCESS_THREAD(send_orders, ev, data)
         printf("[ORDER] Sending order %d to the node %d (%s)\n", order, route->addr_fwd.u8[0], message);
       }
     }
-    
+
+    // Check if there are some old routes to delete
     remove_old_routes();
+
     /* Delay 1 minute */
     etimer_set(&et, (random_rand()%20)*CLOCK_SECOND + 10);
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
