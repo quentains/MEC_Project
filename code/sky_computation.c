@@ -98,12 +98,11 @@ int power(int a, int b)
 // Computing the slope of child values
 float get_slope(int* last_values)
 {
-  printf("Computing slope...\n");
+  printf("[SLOPE COMPUTATION] Computing slope...\n");
   size_t i;
   float sumX=0, sumY=0, sumX2=0, sumXY=0, a, b;
   for (i = 0 ; i < NUMBER_OF_SAVED_VALUES ; i++)
   {
-    printf("last_values[%d] = %d\n", i, last_values[i]);
     sumX = sumX + (i+1);
     sumX2 = sumX2 + (i+1)*(i+1);
     sumY = sumY + last_values[i];
@@ -473,7 +472,7 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       // Check if there are enough values
       if (this_child->nvalues == NUMBER_OF_SAVED_VALUES)
       {
-        printf("Enough data for child %d, computing the slope...\n", this_child->id);
+        printf("[SLOPE COMPUTATION] Enough data for child %d, computing the slope...\n", this_child->id);
         slope = get_slope(this_child->last_values);
 
         // If already open, increase the "timer"
@@ -483,7 +482,7 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
         // If the valve need to be open
         if( slope > 1.0 )
         {
-          printf("The slope is > 1, opening the valve of node %d\n", this_child->id);
+          printf("[SLOPE COMPUTATION] The slope is > 1, opening the valve of node %d\n", this_child->id);
           
           // Already open
           if (this_child->is_open == 1)
