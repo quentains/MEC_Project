@@ -29,6 +29,24 @@ int power(int a, int b)
   return res;
 }
 
+// Function to modify to adapt the order execution
+// In this case, we use LEDs to simulate the valve
+void execute_order(int order)
+{
+  if(order == 1)
+  {
+    // If the valve is open, the green led is on
+    leds_off(LEDS_RED);
+    leds_on(LEDS_GREEN);
+  }
+  else
+  {
+    // If the valve is close, the red led is on
+    leds_on(LEDS_RED);
+    leds_off(LEDS_GREEN);
+  }
+}
+
 
 /* This structure holds information about the routes. */
 struct routes {
@@ -257,19 +275,8 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
     if(recipient == linkaddr_node_addr.u8[0])
     {
       printf("I was ordered by %d to follow order %d (%s)\n", from->u8[0], order, message);
-      // To simulate the valve, we used LEDs
-      if(order == 1)
-      {
-        // If the valve is open, the green led is on
-        leds_off(LEDS_RED);
-        leds_on(LEDS_GREEN);
-      }
-      else
-      {
-        // If the valve is close, the red led is on
-        leds_on(LEDS_RED);
-        leds_off(LEDS_GREEN);
-      }
+      // Execute the order
+      execute_order(order);
     }
     // If the message is not for me
     else

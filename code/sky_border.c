@@ -16,19 +16,6 @@
 #define STR_(X) #X
 #define STR(X) STR_(X)
 
-// Utils function for computing the Rime ID
-int power(int a, int b)
-{
-  int res = 1;
-  size_t i;
-  for(i = 0 ; i < b ; i++)
-  {
-    res = res * a;
-  }
-  return res;
-}
-
-
 /* This structure holds information about the routes. */
 struct routes {
 
@@ -48,6 +35,52 @@ struct routes {
 
 MEMB(routes_memb, struct routes, MAX_ROUTES);
 LIST(routes_list);
+
+// Utils function for computing the Rime ID
+int power(int a, int b)
+{
+  int res = 1;
+  size_t i;
+  for(i = 0 ; i < b ; i++)
+  {
+    res = res * a;
+  }
+  return res;
+}
+
+//Utils to send order to a node
+void send_order(int order, int id, struct runicast_conn *c)
+{
+  printf("[ORDER] Send order %d to node %d\n", order, id);
+
+  char message[10];
+  sprintf(message, "COM%d%0"STR(ID_SIZE)"d", order, id);
+  packetbuf_copyfrom(message, strlen(message));
+
+  struct routes *route;
+  /* Check if we already know this routes. */
+  for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
+  {
+    // We break out of the loop if the address in the list matches with from
+    if((int)route->id == (int)id) 
+    {
+      break;
+    }
+
+  }
+
+  // If new_route is NULL, this node was not found in our list
+  if(NULL == route)
+  {
+    printf("[ORDER] No route for node %d\n", id);
+  }
+  else 
+  {
+    runicast_send(c, &route->addr_fwd, MAX_RETRANSMISSIONS);
+    printf("[ORDER] Sending order %d to the node %d (%s)\n", order, route->addr_fwd.u8[0], message);
+  }
+
+}
 
 /*---------------------------------------------------------------------------*/
 PROCESS(network_setup, "Network Setup");
@@ -229,40 +262,16 @@ PROCESS_THREAD(send_orders, ev, data)
     if(!runicast_is_transmitting(&runicast)) {
 
       // TODO : Get this from the python server
-      destination = random_rand()%20;
-      order = 1;
+      //destination = <RIME ID>;
+      //order = <1 or 0>;
 
-      sprintf(message, "COM%d%0"STR(ID_SIZE)"d", order, destination);
-      packetbuf_copyfrom(message, strlen(message));
-
-      struct routes *route;
-      /* Check if we already know this routes. */
-      for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
-      {
-        // We break out of the loop if the address in the list matches with from
-        if((int)route->id == (int)destination) 
-        {
-          break;
-        }
-
-      }
-
-      // If new_route is NULL, this node was not found in our list
-      if(NULL == route)
-      {
-        printf("[ORDER] No route for node %d\n", destination);
-      }
-      else 
-      {
-        runicast_send(&runicast, &route->addr_fwd, MAX_RETRANSMISSIONS);
-        printf("[ORDER] Sending order %d to the node %d (%s)\n", order, route->addr_fwd.u8[0], message);
-      }
+      //send_order(order, destination, &runicast);
     }
 
     // Check if there are some old routes to delete
     remove_old_routes();
 
-    /* Delay 1 minute */
+    /* Delay */
     etimer_set(&et, (random_rand()%20)*CLOCK_SECOND + 10);
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
 

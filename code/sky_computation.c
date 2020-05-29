@@ -11,26 +11,13 @@
 #define MAX_RETRANSMISSIONS 4
 #define MAX_ROUTES 30 // Adapt it for your network
 #define INACTIVE_MESSAGE 20
-#define NUMBER_OF_SAVED_VALUES 30
+#define NUMBER_OF_SAVED_VALUES 5
 #define MAX_CHILDREN 5 // Adapt it for your network
 #define ID_SIZE 3
 
 // Used to correctly print the ID in the messages
 #define STR_(X) #X
 #define STR(X) STR_(X)
-
-// Utils function for computing the Rime ID
-int power(int a, int b)
-{
-  int res = 1;
-  size_t i;
-  for(i = 0 ; i < b ; i++)
-  {
-    res = res * a;
-  }
-  return res;
-}
-
 
 /* This structure holds information about the routes. */
 struct routes {
@@ -77,6 +64,72 @@ LIST(routes_list);
 // memory allocation for children
 MEMB(children_memb, struct children, MAX_CHILDREN);
 LIST(children_list);
+
+// Utils function for computing the Rime ID
+int power(int a, int b)
+{
+  int res = 1;
+  size_t i;
+  for(i = 0 ; i < b ; i++)
+  {
+    res = res * a;
+  }
+  return res;
+}
+
+// Computing the slope of child values
+float get_slope(int* last_values)
+{
+  printf("Computing slope...\n");
+  size_t i;
+  float sumX=0, sumY=0, sumX2=0, sumXY=0, a, b;
+  for (i = 0 ; i < NUMBER_OF_SAVED_VALUES ; i++)
+  {
+    printf("last_values[%d] = %d\n", i, last_values[i]);
+    sumX = sumX + (i+1);
+    sumX2 = sumX2 + (i+1)*(i+1);
+    sumY = sumY + last_values[i];
+    sumXY = sumXY + (i+1)*last_values[i];
+  }
+  b = (NUMBER_OF_SAVED_VALUES*sumXY-sumX*sumY)/(NUMBER_OF_SAVED_VALUES*sumX2-sumX*sumX);
+  a = (sumY - b*sumX)/NUMBER_OF_SAVED_VALUES;
+  return -b/a;
+}
+
+//Utils to send order to a node
+void send_order(int order, int id, struct runicast_conn *c)
+{
+  printf("[ORDER] Send order %d to node %d\n", order, id);
+
+  char message[10];
+  sprintf(message, "COM%d%0"STR(ID_SIZE)"d", order, id);
+  packetbuf_copyfrom(message, strlen(message));
+
+  struct routes *route;
+  /* Check if we already know this routes. */
+  for(route = list_head(routes_list); route != NULL; route = list_item_next(route)) 
+  {
+    // We break out of the loop if the address in the list matches with from
+    if((int)route->id == (int)id) 
+    {
+      break;
+    }
+
+  }
+
+  // If new_route is NULL, this node was not found in our list
+  if(NULL == route)
+  {
+    printf("[ORDER] No route for node %d\n", id);
+  }
+  else 
+  {
+    runicast_send(c, &route->addr_fwd, MAX_RETRANSMISSIONS);
+    printf("[ORDER] Sending order %d to the node %d (%s)\n", order, route->addr_fwd.u8[0], message);
+  }
+
+}
+
 
 /*---------------------------------------------------------------------------*/
 PROCESS(network_setup, "Network Setup");
@@ -280,12 +333,16 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
 {
   char message[10];
   strcpy(message, (char *)packetbuf_dataptr());
-  int original_sender = 0;
+  int original_sender = 0, data;
   size_t i;
+  float slope;
   
   // If SRV message, need to forward it to the parent_node
   if (message[0] == 'S' && message[1] == 'R' && message[2] == 'V')
   {
+    // Get the air_quality
+    data = (message[3]-48)*10 + (message[4]-48);
+
     // Get the address of the original sender
     for(i = 0 ; i < ID_SIZE ; i++)
     {
@@ -362,7 +419,6 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
     if ( new_route->is_child != 1 )
     {
       //STORE THE SENSOR INFO
-      int data = rand() % 10;   //TODO THIS SHOULD BE FROM MESSAGE
       struct children *this_child;
       this_child = get_children(original_sender);
 
@@ -392,9 +448,21 @@ recv_ruc(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
       printf("[FORWARDING THREAD] [TO SERVER] Forwarding from %d to %d (%s)\n", from->u8[0], parent_node->u8[0], message);
     } // When the node is a child
     if ( new_route->is_child == 0 )
-    {  //TODO the maths
-      // COMPUTE SLOPE
-      // RESPOND TO MESSAGE
+    {  
+      struct children *this_child;
+      this_child = get_children(original_sender);
+      // Check if there are enough values
+      if (this_child->nvalues == NUMBER_OF_SAVED_VALUES)
+      {
+        printf("Enough data for child %d, computing the slope...\n", this_child->id);
+        slope = get_slope(this_child->last_values);
+        if( slope > 1.0 )
+        {
+          printf("The slope is > 1, opening the valve of node %d\n", this_child->id);
+          // Send the order to open the valve
+          send_order(1, this_child->id, c);
+        }
+      }
     }
 
   }
