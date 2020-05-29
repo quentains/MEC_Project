@@ -1,0 +1,28 @@
+MESSAGES :
+	SRV : Server (Message going from sensors to the server)
+	COM : Command (Message going from the server/computation node to the sensors)
+	NDA & NDR : Neighbor Discovery Announce/Response (Message used for setup the mesh network)
+
+Network setup :
+	NDA : Neighbor Discovery Announce : Broadcast message sent to announce the new node to other
+	NDR : Neighbor Discovery Response : Answer to the NDA messages (only sent by the already connected nodes, and the border node)
+
+	Example : The node 1 is the border node, the node 2 is connected to it. The new node 3 try to connect to the network.
+
+	The node 3 : "NDA" to all
+	The node(s) that received the NDA from 3 : "NDR3"
+	The node 3 will choose the best signal parent from the NDR(s).
+
+	It's important to notice that the response contains the id of the destination node, to avoid loop.
+
+Data messages from the sensors :
+	SRV : Server message : Message sent by the sensors to inform the network about the air quality
+
+	If air quality = 50 and node id = 2 :
+	"SRV50002" will be sent (node ID are coding on 3 digits).
+
+Order messages from the server / computation nodes :
+	COM : Command message : Sent by the server or the computation nodes to order a sensor to open/close a valve.
+
+	If we want to open the valve of the node 5 : 
+	"COM1005" (open = 1 and close = 0 + node ID are still coding on 3 digits)
